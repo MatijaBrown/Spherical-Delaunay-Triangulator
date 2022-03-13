@@ -13,11 +13,6 @@ namespace Planets.Meshes.Planets
 
         public TriangleTreeNode GetContainingTriangle(uint vertex)
         {
-            if (vertex == 50)
-            {
-                System.Console.WriteLine();
-            }
-
             if (TopSupertriangle.Contains(vertex))
             {
                 return TopSupertriangle.FetchSmallestContainingTriangle(vertex);

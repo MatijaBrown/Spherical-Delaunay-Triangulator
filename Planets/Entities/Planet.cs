@@ -10,7 +10,7 @@ namespace Planets.Entities
     public class Planet : Entity, IDisposable
     {
 
-        private const uint VERTEX_COUNT = 50;
+        private const uint VERTEX_COUNT = 200;
 
         private readonly PlanetMeshGenerator _meshGenerator;
         private readonly VAO _vao;

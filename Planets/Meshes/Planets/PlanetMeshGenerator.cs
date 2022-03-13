@@ -35,7 +35,7 @@ namespace Planets.Meshes.Planets
         {
             const float SECTION_ANGLE_SIZE = 2.0f * MathFs.PI / (float)NUMBER_OF_THREADS;
 
-            float angle = Maths.AngleFromPointOnUnitCircle(new Vector2(vertex.X, vertex.Z));
+            float angle = Maths.AngleFromPointOnUnitCircle(Vector2.Normalize(new Vector2(vertex.X, vertex.Z)));
 
             uint stripe = (uint)MathFs.Floor(angle / SECTION_ANGLE_SIZE);
 
@@ -44,11 +44,6 @@ namespace Planets.Meshes.Planets
 
         private void AddVertex(Vector3 vertex, uint i)
         {
-            if (i == 50)
-            {
-                Console.WriteLine("STOP");
-            }
-
             Vertices[i] = vertex;
 
             uint stripe = CalculateStripe(vertex);

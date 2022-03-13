@@ -1,6 +1,7 @@
 ﻿using Silk.NET.Maths;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Numerics;
 using System.Threading.Tasks;
 
@@ -60,16 +61,16 @@ namespace Planets.Meshes.Planets
 
             var start = new Vector3()
             {
-                X = MathF.Sin(_threadIndex * SECTION_ANGLE_SIZE),
+                X = MathF.Cos(_threadIndex * SECTION_ANGLE_SIZE),
                 Y = 0.0f,
-                Z = MathF.Cos(_threadIndex * SECTION_ANGLE_SIZE)
+                Z = MathF.Sin(_threadIndex * SECTION_ANGLE_SIZE)
             };
 
             var end = new Vector3()
             {
-                X = MathF.Sin(_threadIndex * SECTION_ANGLE_SIZE + SECTION_ANGLE_SIZE),
+                X = MathF.Cos(_threadIndex * SECTION_ANGLE_SIZE + SECTION_ANGLE_SIZE),
                 Y = 0.0f,
-                Z = MathF.Cos(_threadIndex * SECTION_ANGLE_SIZE + SECTION_ANGLE_SIZE)
+                Z = MathF.Sin(_threadIndex * SECTION_ANGLE_SIZE + SECTION_ANGLE_SIZE)
             };
 
             // Top
@@ -216,13 +217,17 @@ namespace Planets.Meshes.Planets
             Vector3 pointOnPlane = PointFromLineSteepnesses(t, steepnesses);
 
             // One axis can safely be ignored here because of the projection. Thus we ignore the z axis.
-            var pa = new Vector2(a.X, a.Y);
-            var pb = new Vector2(b.X, b.Y);
-            var pc = new Vector2(c.X, c.Y);
+            var pay = new Vector2(a.X, a.Y);
+            var pby = new Vector2(b.X, b.Y);
+            var pcy = new Vector2(c.X, c.Y);
+            var pvy = new Vector2(pointOnPlane.X, pointOnPlane.Y);
 
-            var pv = new Vector2(pointOnPlane.X, pointOnPlane.Y);
+            var paz = new Vector2(a.X, a.Z);
+            var pbz = new Vector2(b.X, b.Z);
+            var pcz = new Vector2(c.X, c.Z);
+            var pvz = new Vector2(pointOnPlane.X, pointOnPlane.Z);
 
-            return IsPointInTriangle(pv, pa, pb, pc);
+            return IsPointInTriangle(pvy, pay, pby, pcy) && IsPointInTriangle(pvz, paz, pbz, pcz);
         }
 
         public bool SimplexHasSide(int simplex, uint a, uint b)
@@ -368,9 +373,9 @@ namespace Planets.Meshes.Planets
             CheckEdges(node.Child3);
         }
 
-        private static bool CheckSimplex(Simplex simplex) // Finally delete the large triangles
+        private bool CheckSimplex(Simplex simplex) // Finally delete the large triangles
         {
-            HashSet<uint> generated = new(new uint[] { 0, 1, 2, 3 });
+            HashSet<uint> generated = new(new uint[] { Indices[0], Indices[1], Indices[2], Indices[3] });
             if (generated.Contains(simplex.A) || generated.Contains(simplex.B) || generated.Contains(simplex.C))
             {
                 return false;

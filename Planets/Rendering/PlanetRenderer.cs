@@ -38,6 +38,8 @@ namespace Planets.Rendering
             _shader.LoadMatrix("transformationMatrix", transform.CreateTransformationMatrix());
             _shader.LoadMatrix("viewMatrix", camera.CalculateViewMatrix());
 
+            _shader.LoadFloat("radius", 10.0f);
+
             _gl.DrawElements(PrimitiveType.Lines, planet.Mesh.VertexCount, DrawElementsType.UnsignedInt, null);
 
             _shader.Stop();
