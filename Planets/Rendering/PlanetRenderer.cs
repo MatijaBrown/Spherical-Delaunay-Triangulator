@@ -40,6 +40,8 @@ namespace Planets.Rendering
 
             _shader.LoadFloat("radius", 10.0f);
 
+            _gl.PointSize(5.0f);
+            _gl.LineWidth(2.5f);
             _gl.DrawElements(PrimitiveType.Lines, planet.Mesh.VertexCount, DrawElementsType.UnsignedInt, null);
 
             _shader.Stop();

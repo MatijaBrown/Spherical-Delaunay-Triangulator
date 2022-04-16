@@ -1,5 +1,4 @@
 ﻿using Planets.Utils;
-using System;
 using System.Collections.Generic;
 using System.Numerics;
 using System.Threading.Tasks;
@@ -11,23 +10,28 @@ namespace Planets.Meshes.Planets
     {
 
         // MUST be >= 3! Otherwise the initial spherical triangles can't mathematically exist!
-        public const uint NUMBER_OF_THREADS = 6;
+        public const uint NUMBER_OF_THREADS = 4;
 
-        private readonly DelaunyTriangulator[] _triangulators = new DelaunyTriangulator[NUMBER_OF_THREADS];
+        private readonly DelaunayTriangulator[] _triangulators = new DelaunayTriangulator[NUMBER_OF_THREADS];
 
-        private readonly uint _vertexCount;
+        private readonly int _vertexCount;
 
         public Vector3[] Vertices { get; }
 
-        public PlanetMeshGenerator(uint vertexCount)
+        public PlanetMeshGenerator(int vertexCount)
         {
             _vertexCount = vertexCount;
 
-            Vertices = new Vector3[_vertexCount + (NUMBER_OF_THREADS * DelaunyTriangulator.REQUIRED_EXTRA_SPACE)]; // Yes I stick the giant triangle vertices in there, but that makes the code such much more simpler, and honestly it's just 24 floats more in the 10000000 or so vertex sphere.
+            Vertices = new Vector3[_vertexCount + (NUMBER_OF_THREADS * DelaunayTriangulator.REQUIRED_EXTRA_SPACE)]; // Yes I stick the giant triangle vertices in there, but that makes the code such much more simpler, and honestly it's just 24 floats more in the 10000000 or so vertex sphere.
 
-            for (uint i = 0; i < NUMBER_OF_THREADS; i++)
+            for (int i = 0; i < NUMBER_OF_THREADS; i++)
             {
-                _triangulators[i] = new DelaunyTriangulator(this, i);
+                _triangulators[i] = new DelaunayTriangulator(Vertices, i);
+                for (int j = 0; j < DelaunayTriangulator.REQUIRED_EXTRA_SPACE; j++)
+                {
+                    _triangulators[i].AddIndex((uint)(i * DelaunayTriangulator.REQUIRED_EXTRA_SPACE) + (uint)j); // Add the indices for the supertriangles.
+                }
+                _triangulators[i].GenerateSupertriangles();
             }
         }
 
@@ -42,12 +46,17 @@ namespace Planets.Meshes.Planets
             return stripe;
         }
 
-        private void AddVertex(Vector3 vertex, uint i)
+        private void AddVertex(Vector3 vertex, uint index)
         {
-            Vertices[i] = vertex;
+            if (index == 5015)
+            {
+                System.Console.WriteLine("This should work!");
+            }
+
+            Vertices[index] = vertex;
 
             uint stripe = CalculateStripe(vertex);
-            _triangulators[stripe].Indices.Add(i);
+            _triangulators[stripe].AddIndex(index);
         }
 
         private void GenerateVertices()
@@ -66,7 +75,7 @@ namespace Planets.Meshes.Planets
                     Z = MathFs.Cos(φ)
                 };
 
-                AddVertex(vertex, (NUMBER_OF_THREADS * DelaunyTriangulator.REQUIRED_EXTRA_SPACE) + i);
+                AddVertex(vertex, NUMBER_OF_THREADS * DelaunayTriangulator.REQUIRED_EXTRA_SPACE + i);
             }
         }
 
@@ -74,10 +83,10 @@ namespace Planets.Meshes.Planets
         {
             var indices = new List<uint>();
 
-            var processingTasks = new Task<ICollection<uint>>[NUMBER_OF_THREADS];
+            /*var processingTasks = new Task<ICollection<uint>>[NUMBER_OF_THREADS];
             for (uint i = 0; i < NUMBER_OF_THREADS; i++)
             {
-                processingTasks[i] = _triangulators[i].ComputeTriangulation();
+                processingTasks[i] = _triangulators[i].TriangulateAsync();
             }
 
             Task.WaitAll(processingTasks);
@@ -93,8 +102,9 @@ namespace Planets.Meshes.Planets
 
                 _triangulators[i].Dispose();
                 _triangulators[i] = null;
-            }
-            GC.Collect();
+            }*/
+
+            indices.AddRange(_triangulators[2].Triangulate());
 
             return indices.ToArray();
         }
