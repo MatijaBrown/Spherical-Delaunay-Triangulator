@@ -1,7 +1,7 @@
 ﻿using Planets.Utils;
 using System;
 using System.Collections.Generic;
-using System.Numerics;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace Planets.Meshes.Planets
@@ -12,19 +12,22 @@ namespace Planets.Meshes.Planets
         public const uint REQUIRED_EXTRA_SPACE = 4;
 
         private readonly IList<uint> _indices = new List<uint>();
-        private readonly Vector3[] _vertices;
+        private readonly Vector3D[] _vertices;
         private readonly int _index;
 
-        private readonly Task<ICollection<uint>> _triangulationTask;
+        private readonly Task _triangulationTask;
 
         private DelaunayTree _delaunayTree;
+        private Vector3D _centre;
 
-        public DelaunayTriangulator(Vector3[] vertices, int index)
+        public ICollection<uint> CompletedTriangulation { get; } = new List<uint>();
+
+        public DelaunayTriangulator(Vector3D[] vertices, int index)
         {
             _vertices = vertices;
             _index = index;
 
-            _triangulationTask = new Task<ICollection<uint>>(Triangulate);
+            _triangulationTask = new Task(Triangulate);
         }
 
         public void AddIndex(uint index)
@@ -34,20 +37,35 @@ namespace Planets.Meshes.Planets
 
         public void GenerateSupertriangles()
         {
-            float nThOfCirle = 2.0f * MathF.PI / PlanetMeshGenerator.NUMBER_OF_THREADS;
+            double nThOfCirle = 2 * Math.PI / PlanetMeshGenerator.NUMBER_OF_THREADS;
 
-            _vertices[_indices[0]] = new Vector3(MathF.Cos(_index * nThOfCirle),                0.0f, MathF.Sin(_index * nThOfCirle             ));
-            _vertices[_indices[1]] = new Vector3(MathF.Cos(_index * nThOfCirle + nThOfCirle),   0.0f, MathF.Sin(_index * nThOfCirle + nThOfCirle));
-            _vertices[_indices[2]] = Vector3.UnitY;
-            _vertices[_indices[3]] = -Vector3.UnitY;
+            // This generates points on the left, right, centre-top and centre-bottom positions of this section. In that order.
+            _vertices[_indices[0]] = new Vector3D(Math.Cos(_index * nThOfCirle),                0, Math.Sin(_index * nThOfCirle             ));
+            _vertices[_indices[1]] = new Vector3D(Math.Cos(_index * nThOfCirle + nThOfCirle),   0, Math.Sin(_index * nThOfCirle + nThOfCirle));
+            _vertices[_indices[2]] = Vector3D.UnitY;
+            _vertices[_indices[3]] = -Vector3D.UnitY;
 
-            DelaunayTreeNode top = SortCCW(_indices[0], _indices[2], _indices[1], null, null, null);
-            DelaunayTreeNode bottom = SortCCW(_indices[0], _indices[3], _indices[1], null, null, null);
+            _centre = new Vector3D(Math.Cos((_index * nThOfCirle) + (nThOfCirle / 2)),          0, Math.Sin((_index * nThOfCirle) + (nThOfCirle / 2)));
+
+            DelaunayTreeNode top =      SortCCW(_indices[0], _indices[2], _indices[1], null, null, null);
+            DelaunayTreeNode bottom =   SortCCW(_indices[0], _indices[3], _indices[1], null, null, null);
 
             top.TB = bottom;
             bottom.TB = top;
 
             _delaunayTree = new DelaunayTree(top, bottom);
+        }
+
+        public bool IsResponsibleFor(Vector3D vertex)
+        {
+            return 
+                  ( Maths.IsCCW(_vertices[_delaunayTree.Top.A], _vertices[_delaunayTree.Top.B], vertex)
+               &&   Maths.IsCCW(_vertices[_delaunayTree.Top.B], _vertices[_delaunayTree.Top.C], vertex)
+               &&   Maths.IsCCW(_vertices[_delaunayTree.Top.C], _vertices[_delaunayTree.Top.A], vertex))
+
+               || ( Maths.IsCCW(_vertices[_delaunayTree.Bottom.A], _vertices[_delaunayTree.Bottom.B], vertex)
+               &&   Maths.IsCCW(_vertices[_delaunayTree.Bottom.B], _vertices[_delaunayTree.Bottom.C], vertex)
+               &&   Maths.IsCCW(_vertices[_delaunayTree.Bottom.C], _vertices[_delaunayTree.Bottom.A], vertex));
         }
 
         private DelaunayTreeNode SortCCW(DelaunayTreeNode node)
@@ -77,7 +95,7 @@ namespace Planets.Meshes.Planets
             var s1 = new DelaunayTreeNode(node.B, node.C, vertex, null, null, node.TA);
             var s2 = new DelaunayTreeNode(node.C, node.A, vertex, null, null, node.TB);
 
-            // Set the opposites of the opposites (us selves) to the newly generated sub-triangles. This will stop us from having to loop again later.
+            // Set the opposits of the opposits (us selves) to the newly generated sub-triangles. This will stop us from having to search them again later.
             node.TC?.ReplaceOpposite(node, s0);
             node.TA?.ReplaceOpposite(node, s1);
             node.TB?.ReplaceOpposite(node, s2);
@@ -98,7 +116,7 @@ namespace Planets.Meshes.Planets
         }
 
         private DelaunayTreeNode InsertTriangleInTree(uint vertex, DelaunayTreeNode node)
-        {
+       {
             if (node.ChildCount == 0)
             {
                 InsertVertex(vertex, node);
@@ -165,10 +183,10 @@ namespace Planets.Meshes.Planets
                 return;
             }
 
-            Vector3 vertex = _vertices[index];
+            Vector3D vertex = _vertices[index];
 
-            Vector3 cOpp = Maths.Circumcentre(_vertices[opp.A], _vertices[opp.B], _vertices[opp.C]);
-            float rOpp = Maths.Circumradius(_vertices[opp.A], _vertices[opp.B], _vertices[opp.C]);
+            Vector3D cOpp = Maths.Circumcentre(_vertices[opp.A], _vertices[opp.B], _vertices[opp.C]);
+            double rOpp = Maths.Circumradius(_vertices[opp.A], _vertices[opp.B], _vertices[opp.C]);
 
             if (Maths.ArcLength(vertex, cOpp) < rOpp)
             {
@@ -179,20 +197,8 @@ namespace Planets.Meshes.Planets
             }
         }
 
-        private void CheckEdges(DelaunayTreeNode node)
-        {
-            CheckEdge(node.A, node, node.TA);
-            CheckEdge(node.B, node, node.TB);
-            CheckEdge(node.C, node, node.TC);
-        }
-
         private void AddVertex(uint index)
         {
-            if (index == 5015)
-            {
-                Console.WriteLine("TEST");
-            }
-
             DelaunayTreeNode node;
             if (ContainsVertex(index, _delaunayTree.Top))
             {
@@ -204,54 +210,55 @@ namespace Planets.Meshes.Planets
             }
             else
             {
+                Console.WriteLine("Lies on border!");
                 throw new Exception("Vertex at index " + index + " (" + _vertices[index].ToString() + ") is not inside bounds of this triangulation!");
-            }
-
-            // The nodes all have 3 children here!
-            CheckEdges(node.Children[0]);
-            CheckEdges(node.Children[1]);
-            CheckEdges(node.Children[2]);
-        }
-
-        private void AddBottomSimplexIndices(DelaunayTreeNode node, IList<uint> list)
-        {
-            if (node.ChildCount == 0)
-            {
-                list.Add(node.A);
-                list.Add(node.B);
-                list.Add(node.C);
-                return;
             }
 
             var en = node.GetEnumerator();
             while (en.MoveNext())
             {
-                AddBottomSimplexIndices(en.Current, list);
+                CheckEdge(index, en.Current, en.Current.TC);
+            }
+        }
+
+        private void AddBottomNodes(DelaunayTreeNode node)
+        {
+            if (node.ChildCount == 0)
+            {
+                CompletedTriangulation.Add(node.A);
+                CompletedTriangulation.Add(node.B);
+                CompletedTriangulation.Add(node.C);
+            }
+
+            var en = node.GetEnumerator();
+            while (en.MoveNext())
+            {
+                AddBottomNodes(en.Current);
                 en.Current.Clear();
             }
         }
 
-        private IList<uint> GenerateMeshInformation()
+        private void GenerateMeshInformation()
         {
-            var mesh = new List<uint>();
-            AddBottomSimplexIndices(_delaunayTree.Top, mesh);
-            AddBottomSimplexIndices(_delaunayTree.Bottom, mesh);
-            return mesh;
+            AddBottomNodes(_delaunayTree.Top);
+            _delaunayTree.Top.Clear();
+            AddBottomNodes(_delaunayTree.Bottom);
+            _delaunayTree.Bottom.Clear();
         }
 
-        public ICollection<uint> Triangulate()
+        public void Triangulate()
         {
             for (int i = (int)REQUIRED_EXTRA_SPACE; i < _indices.Count; i++)
             {
                 AddVertex(_indices[i]);
             }
-            return GenerateMeshInformation();
+            GenerateMeshInformation();
         }
 
-        public async Task<ICollection<uint>> TriangulateAsync()
+        public async Task TriangulateAsync()
         {
             _triangulationTask.Start();
-            return await _triangulationTask;
+            await _triangulationTask;
         }
 
         public void Dispose()

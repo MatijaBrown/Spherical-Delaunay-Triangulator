@@ -42,7 +42,8 @@ namespace Planets.Rendering
 
             _gl.PointSize(5.0f);
             _gl.LineWidth(2.5f);
-            _gl.DrawElements(PrimitiveType.Lines, planet.Mesh.VertexCount, DrawElementsType.UnsignedInt, null);
+            _gl.PolygonMode(GLEnum.FrontAndBack, GLEnum.Line);
+            _gl.DrawElements(PrimitiveType.Triangles, planet.Mesh.VertexCount, DrawElementsType.UnsignedInt, null);
 
             _shader.Stop();
 

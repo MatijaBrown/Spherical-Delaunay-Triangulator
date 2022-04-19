@@ -1,8 +1,7 @@
 ﻿using Planets.Utils;
+using System;
 using System.Collections.Generic;
-using System.Numerics;
 using System.Threading.Tasks;
-using MathFs = System.MathF;
 
 namespace Planets.Meshes.Planets
 {
@@ -10,19 +9,19 @@ namespace Planets.Meshes.Planets
     {
 
         // MUST be >= 3! Otherwise the initial spherical triangles can't mathematically exist!
-        public const uint NUMBER_OF_THREADS = 4;
+        public const uint NUMBER_OF_THREADS = 16;
 
         private readonly DelaunayTriangulator[] _triangulators = new DelaunayTriangulator[NUMBER_OF_THREADS];
 
         private readonly int _vertexCount;
 
-        public Vector3[] Vertices { get; }
+        public Vector3D[] Vertices { get; }
 
         public PlanetMeshGenerator(int vertexCount)
         {
             _vertexCount = vertexCount;
 
-            Vertices = new Vector3[_vertexCount + (NUMBER_OF_THREADS * DelaunayTriangulator.REQUIRED_EXTRA_SPACE)]; // Yes I stick the giant triangle vertices in there, but that makes the code such much more simpler, and honestly it's just 24 floats more in the 10000000 or so vertex sphere.
+            Vertices = new Vector3D[_vertexCount + (NUMBER_OF_THREADS * DelaunayTriangulator.REQUIRED_EXTRA_SPACE)]; // Yes I stick the giant triangle vertices in there, but that makes the code such much more simpler, and honestly it's just 24 floats more in the 10000000 or so vertex sphere.
 
             for (int i = 0; i < NUMBER_OF_THREADS; i++)
             {
@@ -35,24 +34,21 @@ namespace Planets.Meshes.Planets
             }
         }
 
-        private static uint CalculateStripe(Vector3 vertex)
+        private uint CalculateStripe(Vector3D vertex)
         {
-            const float SECTION_ANGLE_SIZE = 2.0f * MathFs.PI / (float)NUMBER_OF_THREADS;
-
-            float angle = Maths.AngleFromPointOnUnitCircle(Vector2.Normalize(new Vector2(vertex.X, vertex.Z)));
-
-            uint stripe = (uint)MathFs.Floor(angle / SECTION_ANGLE_SIZE);
-
-            return stripe;
-        }
-
-        private void AddVertex(Vector3 vertex, uint index)
-        {
-            if (index == 5015)
+            for (uint i = 0; i < NUMBER_OF_THREADS; i++)
             {
-                System.Console.WriteLine("This should work!");
+                if (_triangulators[i].IsResponsibleFor(vertex))
+                {
+                    return i;
+                }
             }
 
+            throw new System.Exception("No responsible triangulator found for vertex <" + vertex.ToString() + "> !");
+        }
+
+        private void AddVertex(Vector3D vertex, uint index)
+        {
             Vertices[index] = vertex;
 
             uint stripe = CalculateStripe(vertex);
@@ -63,27 +59,34 @@ namespace Planets.Meshes.Planets
         {
             for (uint i = 0; i < _vertexCount; i++)
             {
-                float idx = (float)i + 0.5f;
+                double idx = i + 0.5;
 
-                float φ = MathFs.Acos(1.0f - 2.0f * idx / (float)_vertexCount);
-                float θ = MathFs.PI * (1.0f + MathFs.Sqrt(5.0f)) * idx;
+                double φ = Math.Acos(1.0 - 2.0 * idx / _vertexCount);
+                double θ = Math.PI * (1.0 + Math.Sqrt(5.0)) * idx;
 
-                Vector3 vertex = new()
+                Vector3D vertex = new()
                 {
-                    X = MathFs.Cos(θ) * MathFs.Sin(φ),
-                    Y = MathFs.Sin(θ) * MathFs.Sin(φ),
-                    Z = MathFs.Cos(φ)
+                    X = Math.Cos(θ) * Math.Sin(φ),
+                    Y = Math.Sin(θ) * Math.Sin(φ),
+                    Z = Math.Cos(φ)
                 };
 
                 AddVertex(vertex, NUMBER_OF_THREADS * DelaunayTriangulator.REQUIRED_EXTRA_SPACE + i);
             }
         }
 
+        private static void AddTriangle(uint a, uint b, uint c, IList<uint> indices)
+        {
+            indices.Add(a);
+            indices.Add(b);
+            indices.Add(c);
+        }
+
         private uint[] DelaunyTriangulate()
         {
             var indices = new List<uint>();
 
-            /*var processingTasks = new Task<ICollection<uint>>[NUMBER_OF_THREADS];
+            var processingTasks = new Task[NUMBER_OF_THREADS];
             for (uint i = 0; i < NUMBER_OF_THREADS; i++)
             {
                 processingTasks[i] = _triangulators[i].TriangulateAsync();
@@ -93,7 +96,7 @@ namespace Planets.Meshes.Planets
 
             for (uint i = 0; i < NUMBER_OF_THREADS; i++)
             {
-                indices.AddRange(processingTasks[i].Result);
+                indices.AddRange(_triangulators[i].CompletedTriangulation);
             }
 
             for (int i = 0; i < _triangulators.Length; i++)
@@ -102,9 +105,7 @@ namespace Planets.Meshes.Planets
 
                 _triangulators[i].Dispose();
                 _triangulators[i] = null;
-            }*/
-
-            indices.AddRange(_triangulators[2].Triangulate());
+            }
 
             return indices.ToArray();
         }

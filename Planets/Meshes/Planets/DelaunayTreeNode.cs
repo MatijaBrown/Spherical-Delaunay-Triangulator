@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Diagnostics;
 
 namespace Planets.Meshes.Planets
 {
@@ -82,11 +81,25 @@ namespace Planets.Meshes.Planets
             TA = cacheAdjacent;
         }
 
+        public bool HasVertex(uint vertex)
+        {
+            return (A == vertex) || (B == vertex) || (C == vertex);
+        }
+
         public DelaunayTreeNode Opposite(uint point)
         {
             if      (point == A) return TA;
             else if (point == B) return TB;
             else if (point == C) return TC;
+
+            throw new Exception(point + " is not part of this triangle!");
+        }
+
+        public uint OppositePoint(uint point)
+        {
+            if      (point == A) return TA.ThirdPoint(B, C);
+            else if (point == B) return TB.ThirdPoint(A, C);
+            else if (point == C) return TC.ThirdPoint(A, B);
 
             throw new Exception(point + " is not part of this triangle!");
         }
@@ -114,6 +127,11 @@ namespace Planets.Meshes.Planets
             else if (((a == C) && (b == A)) || ((b == C) && (a == A))) return B;
 
             throw new Exception(a + " or " + b + " is not part of this triangle!");
+        }
+
+        public bool HasPoint(uint p)
+        {
+            return (A == p) || (B == p) || (C == p);
         }
 
         public void Clear()
